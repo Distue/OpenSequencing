@@ -19,7 +19,7 @@ use Parallel::ForkManager;
 # TODO : TEST
 use Data::Dumper;                
 
-my $pm = new Parallel::ForkManager(40);
+my $pm;
 my @stack;
 
 # -----------------------------------------------------------------------------
@@ -34,10 +34,15 @@ sub new {
     # command 
     my $refVars = shift;
     
+    checkDefined($refVars->{'config'});
+    
     my $self = {  # this variable stores the varibles from the object
         'stack' => [],
-        'debug' => 0
+        'debug' => 0,
+        'config' => $refVars->{'config'}
     };
+    
+    $pm = new Parallel::ForkManager($refVars->{'config'}->getMaxNumberCores());
     
     bless ($self, $class);
     return $self;
@@ -57,6 +62,12 @@ sub DESTROY {
 # -----------------------------------------------------------------------------
 # Static Methods & Variables
 # -----------------------------------------------------------------------------
+
+sub checkDefined {
+    my $var = shift;
+    # print "checking Dir " . $$refDir . "\n";
+    defined($var) or croak ("Essential input not defined."); 
+}
 
 
 # -----------------------------------------------------------------------------
@@ -85,10 +96,11 @@ sub run {
         
         if(defined($command)) {
             # debug
-            if ($self->{'debug'} == 1) {          
-                print $command->get() . "\n\n";
-            } 
-            else {
+            #if ($self->{'debug'} == 1) {
+            #    print "[ DEBUG '" . $command->getName() . "']\n" . $command->getCommand() . "\n";
+            #    print $command->get() . "\n\n";
+            #} 
+            #else {
                 if($command->okayForOpenThreads()) { 
                     # Forks and returns the pid for the child:
                     my $pid = $pm->start and next; 
@@ -102,7 +114,7 @@ sub run {
                     # $ENV{PATH}=""; 
                     $self->process($command); 
                 }
-            }
+            #}
         }
     }
     
@@ -117,18 +129,34 @@ sub process {
     
     my $commandLine = $command->getCommand();
     
+    
+    if ($self->isDebugOn()) {
+        print "DEBUG: ";
+    }
+    
     if ($commandLine =~ /^$/) {
-        print " [ SKIPPING  '" . $command->getName() . "']\n " . $command->get() . "\n";
+        print " [ SKIPPING  '" . $command->getName() . "']\n " . $command->get() . "\n\n";
     }
     else {
-        print "[ EXECUTING '" . $command->getName() . "']\n" . $command->getCommand() . "\n";
+        print "[ EXECUTING '" . $command->getName() . "']\n" . $command->getCommand() . "\n\n";
         
-        
-        if (system($commandLine) != 0) {
-            die("Error while proccessing " . "\n " . $command->get() . "\n"); 
-        }   
+        if($self->isDebugOff()) {
+            if (system($commandLine) != 0) {
+                die("Error while proccessing " . "\n " . $command->get() . "\n\n"); 
+            }
+        }
     }
 
+}
+
+sub isDebugOn {
+    my $self = shift;
+    return($self->{'debug'} == 1);
+}
+
+sub isDebugOff {
+    my $self = shift;
+    return(!$self->isDebugOn());
 }
 
 # turns on debugging

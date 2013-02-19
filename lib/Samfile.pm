@@ -100,6 +100,7 @@ sub toBamfileCommand {
     if ($self->headerHasSQLines() == 1) {
 
         return(Command->new({
+            'name'        => 'sam to bamfile',
             'command'     => $self->getSamToolsPath() . " view -bS " . $self->getFileName() . " > " . $self->getBamFileName() . " 2> " . $self->getLogFile(), 
             'inputFiles'  => [ $self->getFileName() ],
             'outputFiles' => [ $self->getBamFileName() ],

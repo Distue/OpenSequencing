@@ -30,6 +30,7 @@ sub new {
     
     my $self = {  # this variable stores the varibles from the object
         'files' => {},             # keeps all the files
+        'config' => $refVars->{'config'},
         'samtools' => 'samtools',   # todo organize samtools
         'stack' => $refVars->{'stack'} # command stack
     };
@@ -52,6 +53,11 @@ sub DESTROY {
 # Static Methods & Variables
 # -----------------------------------------------------------------------------
 
+sub checkDefined {
+    my $var = shift;
+    # print "checking Dir " . $$refDir . "\n";
+    defined($var) or croak ("Essential input not defined."); 
+}
 
 
 # -----------------------------------------------------------------------------
@@ -125,7 +131,8 @@ sub getBamfileHandler {
     my $self = shift;
     
     my $bamfileHandler = BamfileHandler->new({
-                    'stack' => $self->{'stack'}
+                    'stack' => $self->{'stack'},
+                    'config' => $self->{'config'}
                 });
     
     foreach my $sample ($self->getSamples()) {
@@ -177,6 +184,7 @@ sub sort {
 
         $self->addCommand(
             Command->new({
+                'name'        => "sort",
                 'command'     => "sort -s -k 1,1 " . $samfileName . " > " . $sortedName . " 2> " . $sortedName . ".txt.log",
                 'inputFiles'  => [ $samfileName ],
                 'outputFiles' => [ $sortedName ],
@@ -188,19 +196,32 @@ sub sort {
     $self->run();
 }
 
-sub htseq {
+sub htseqCount {
     my $self = shift;
     
-    my $gtf = shift;
+    
+    my $refVars = shift;
+    
+    my $gtf = $refVars->{'gtf'};
+    my $outputDir = $refVars->{'output'};
+    
     
     # get all the samfile objects
     foreach my $sample ($self->getSamples()) {
         my $sortedName = $self->getSortedSamfileName($sample);
-        my $outputName = $sortedName . ".htseq.count.txt";
+	my $shortSortedName = $self->getSortedSamfileNameShort($sample);
+        my $outputName = $outputDir . $shortSortedName . ".htseq.count.txt";
+        my $samOutputName = $outputDir . $shortSortedName . ".htseq.count.sam";
         
         $self->addCommand(
             Command->new({
-                'command'     => "htseq-count --stranded=no  " . $sortedName . " " . $gtf . " > " . $outputName . " 2> " . $outputName . ".log",
+                'name'        => "htseq count",
+                'command'     => "htseq-count --stranded=no"
+                                                #. " -m "
+                                                . " -o " . $samOutputName
+                                                . " " . $sortedName
+                                                . " " . $gtf
+                                                . " 1> " . $outputName . " 2> " . $outputName . ".log",
                 'inputFiles'  => [ $sortedName ],
                 'outputFiles' => [ $outputName ],
                 'openthreads' => 1
@@ -223,6 +244,23 @@ sub getSamfileName {
     return($self->getSamfile($sample)->getFileName());
 }
 
+
+sub getSortedSamfileNameShort {
+    my $self = shift;
+    my $sample = shift;
+    
+    my $longname = $self->getSortedSamfileName($sample);
+    
+    if($longname =~ /.+\/(.+?sorted.sam)$/) {
+        print $1 . "\n\n";
+        return ($1);
+    }
+    else {
+        croak("unexpected error while trimming sam file name.");
+    }
+    
+    
+}
 
 sub getSortedSamfileName {
     my $self = shift;

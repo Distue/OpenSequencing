@@ -52,6 +52,13 @@ sub DESTROY {
 # Static Methods & Variables
 # -----------------------------------------------------------------------------
 
+sub checkDefined {
+    my $var = shift;
+    # print "checking Dir " . $$refDir . "\n";
+    defined($var) or croak ("Essential input not defined."); 
+}
+
+
 # -----------------------------------------------------------------------------
 # Instance Methods
 # -----------------------------------------------------------------------------
@@ -111,9 +118,10 @@ sub sortAndIndex {
         $sortedInput =~ s/\.bam$//;        
 
         
-        print $sortedname . "\n\n";
+        # print $sortedname . "\n\n";
         
         my $command1 = Command->new({
+                'name'        => "samtools sort",
                 'command'     => "samtools sort " . $bamfileName . " " . $sortedInput . " 2> " . $sortedname . ".txt.log",
                 'inputFiles'  => [ $bamfileName ],
                 'outputFiles' => [ $sortedname ],
@@ -121,6 +129,7 @@ sub sortAndIndex {
 
         $self->addCommand(
             Command->new( {
+                'name'             => "samtools index",
                 'command'          => "samtools index " . $sortedname . " 2> " . $sortedname . "-index.txt.log",
                 'inputFiles'       => [ $sortedname ],
                 'outputFiles'      => [ $sortedname . ".bai" ],
@@ -149,6 +158,7 @@ sub sortedToSam {
 
         $self->addCommand(
             Command->new({
+                'name'        => "conversion sorted to sam",
                 'command'     => "samtools view -h -o " . $sortedSamOutput ." " . $sortedBamInput . " 2> " . $sortedSamOutput . ".txt.log",
                 'inputFiles'  => [ $sortedBamInput ],
                 'outputFiles' => [ $sortedSamOutput ],
@@ -170,7 +180,8 @@ sub flagstat {
         $flagstatname =~ s/bam$/flagstat.txt/;
         
         $self->addCommand(
-            Command->new( {    #    > ./sample8_flagstat.txt 
+            Command->new( {    #    > ./sample8_flagstat.txt
+                'name'             => "flagstat",
                 'command'          => "samtools flagstat " . $sortedname . " > " . $flagstatname,
                 'inputFiles'       => [ $sortedname ],
                 'outputFiles'      => [ $flagstatname ],
@@ -225,10 +236,17 @@ sub addCommand {
 sub cufflinks {
     my $self = shift;
     
-    my $cufflinks = shift;
-    my $gtf = shift;
-    my $outputdir = shift;
+    my $refVars = shift;
+    my $config    = $refVars->{'config'};
     
+    my $cufflinks = $config->getCommand("cufflinks");
+    my $gtf       = $refVars->{'gtf'};
+    my $outputdir = $refVars->{'output'};
+    
+    checkDefined($cufflinks);
+    checkDefined($gtf);
+    checkDefined($outputdir);
+     
     unless(-d $outputdir){
         mkdir $outputdir;
     }
@@ -242,7 +260,7 @@ sub cufflinks {
                 'name'        => 'Cufflinks',
                 'command'     => $cufflinks . " " .  
                                 #" --upper-quartile-norm --compatible-hits-norm " .
-                                 "-o " . $outputdir . "/" . $sample . "/ -p 40 -G " . $gtf . " " . $sortedName . " 2> " . $outputdir . "/log-" . $sample . ".txt",
+                                 "-o " . $outputdir . "/" . $sample . "/ -p " . $config->getMaxNumberCores() . " -G " . $gtf . " " . $sortedName . " 2> " . $outputdir . "/log-" . $sample . ".txt",
                 'inputFiles'  => [ $sortedName ],
                 'outputFiles' => [ $outputdir . "/" . $sample ],
                 'openthreads' => 0,

@@ -29,26 +29,23 @@ sub new {
     # command 
     my $refVars = shift;
     
-    checkExists($refVars->{'stack'});
-    checkExists($refVars->{'seqSamples'});
-    checkExists($refVars->{'reference'});
-    checkExists($refVars->{'bwa'});
-    checkDir(\$refVars->{'outputDir'});
+    my $config = $refVars->{'config'};     
+    checkDefined($refVars->{'stack'});
+    checkDefined($refVars->{'seqSamples'});
+    checkDefined($config->getPath('log'));
+
+    $refVars->{'logDir'} = $config->getPath('log');
+
     
-    if(defined($refVars->{'logDir'})) {
-        checkDir(\$refVars->{'outputDir'});
-    }
-    else {
-        $refVars->{'logDir'} = $refVars->{'outputDir'};
-    }
 
     my $self = {  # this variable stores the varibles from the object
         'seqSamples' => $refVars->{'seqSamples'},
-        'outputDir'  => $refVars->{'outputDir'},
+        'outputDir'  => $config->getPath("output"),
         'logDir'     => $refVars->{'logDir'},
-        'reference'  => $refVars->{'reference'},
-        'bwa'        => $refVars->{'bwa'},
-        'stack'      => $refVars->{'stack'}
+        'reference'  => $config->getFileFull("reference"),
+        'bwa'        => $config->getCommand("bwa"),
+        'stack'      => $refVars->{'stack'},
+        'config'     => $refVars->{'config'}
     };
     
     bless ($self, $class);
@@ -69,20 +66,11 @@ sub DESTROY {
 # Static Methods & Variables
 # -----------------------------------------------------------------------------
 
-# checks if the directory is valid and adds '/'
-
-sub checkDir {
-    my $refDir = shift;
-    # print "checking Dir " . $$refDir . "\n";
-    (-d $$refDir) or croak ($$refDir . " cannot be opened"); 
-}
-
-sub checkExists {
+sub checkDefined {
     my $var = shift;
     # print "checking Dir " . $$refDir . "\n";
-    defined($var) or croak ("Essential input not defined"); 
+    defined($var) or croak ("Essential input not defined."); 
 }
-
 
 # -----------------------------------------------------------------------------
 # Instance Methods
@@ -106,7 +94,7 @@ sub createCommandSingleEnds {
         'name'    => "BWA single direction",
         'command' => $self->{'bwa'} . " aln "
                             # processors
-                            . "-t 47 "
+                            . "-t " . $self->{'config'}->getMaxNumberCores() . " "
                             
                             # reference
                             . $self->{'reference'} . " "
@@ -247,6 +235,9 @@ sub run {
                     $self->{'outputDir'} . "log-bwa-" . $sample . "_2.txt"          # log file
                 )
             );
+            
+            
+            
             
             # combine those alignments through the 'bwa sampe' (paired-end) command.
             $self->{'stack'}->add(
