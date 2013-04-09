@@ -12,6 +12,7 @@ package Bamfile;
 use strict;
 use warnings;
 use Carp qw(croak);
+use OpenSeqConfig;
 
 # -----------------------------------------------------------------------------
 # Class Methods
@@ -25,11 +26,17 @@ sub new {
     # command 
     my $refVars = shift;
     
-    checkFile($refVars->{'fullFileName'});
+    checkDefined($refVars->{'config'});
+    
+    if ($refVars->{'config'}->isDebugOff()) {
+        checkFile($refVars->{'fullFileName'});
+    }
 
     my $self = {  # this variable stores the varibles from the object
         'fullFileName' => $refVars->{'fullFileName'},
-        'samtools'     => $refVars->{'samtools'}
+        'samtools'     => $refVars->{'samtools'},
+        'config'       => $refVars->{'config'}
+        
     };
     
     bless ($self, $class);
@@ -53,15 +60,21 @@ sub DESTROY {
 sub checkFile {
     my $fullFileName = shift;
     
-# TODO: check if not debug! 
-#    # check if file is accessable
-#    (-e $fullFileName) or croak("Cannot access Bamfile, or file does not exist '" . $fullFileName . "'");
-#    
-#    # if file name has 0 bytes, delete it
-#    if (-s $fullFileName == 0) {
-#        croak("Bam file is empty: '" . $fullFileName . "'");   
-#    }
+    # check if file is accessable
+    (-e $fullFileName) or croak("Cannot access Bamfile, or file does not exist '" . $fullFileName . "'");
+    
+    # if file name has 0 bytes, delete it
+    if (-s $fullFileName == 0) {
+        croak("Bam file is empty: '" . $fullFileName . "'");   
+    }
 }
+
+sub checkDefined {
+    my $var = shift;
+    # print "checking Dir " . $$refDir . "\n";
+    defined($var) or croak ("Essential input not defined."); 
+}
+
 
 
 # -----------------------------------------------------------------------------

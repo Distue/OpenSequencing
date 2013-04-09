@@ -14,7 +14,7 @@ use warnings;
 use Carp qw(croak);
 use Bamfile;
 use CommandStack;
-
+use SamfileHandler;
 # -----------------------------------------------------------------------------
 # Class Methods
 # -----------------------------------------------------------------------------
@@ -25,13 +25,14 @@ sub new {
     my $class = shift;
     my $refVars = shift;
   
-    #TODO check stack
+    checkDefined($refVars->{'stack'});
+    checkDefined($refVars->{'config'});
     
     my $self = {  # this variable stores the varibles from the object
         'files'    => {} ,                  # keeps all the files
         'samtools' => 'samtools',           # todo organize samtools
         'stack'    => $refVars->{'stack'},  # command stack
-        'logDir'   => $refVars->{'logDir'}  #TODO
+        'config'   => $refVars->{'config'}
     };
     
     bless ($self, $class);
@@ -73,8 +74,8 @@ sub addFile {
             
     my $samfile = Bamfile->new({
                         'fullFileName' => $fullFileName,
-                        'samtools'     => $self->{'samtools'}
-                        # configuration?
+                        'samtools'     => $self->{'samtools'},
+                        'config'       => $self->{'config'}
                     });
     
     $self->{'files'}->{$sampleName} = $samfile;
@@ -115,14 +116,15 @@ sub sortAndIndex {
         my $bamfileName = $self->getBamfile($sample)->get();
         my $sortedname = $self->getSortedBamfileName($sample);
         my $sortedInput = $sortedname;
-        $sortedInput =~ s/\.bam$//;        
-
-        
-        # print $sortedname . "\n\n";
-        
+        $sortedInput =~ s/\.bam$//;  
+        my $logfile = $sortedInput;
+        my $outputDir = $self->{'config'}->getPath("output");
+        my $inputDir = $self->{'config'}->getPath("log");
+        $logfile =~ s/$outputDir/$inputDir/;    
+ 
         my $command1 = Command->new({
                 'name'        => "samtools sort",
-                'command'     => "samtools sort " . $bamfileName . " " . $sortedInput . " 2> " . $sortedname . ".txt.log",
+                'command'     => "samtools sort " . $bamfileName . " " . $sortedInput . " 2> "  . $logfile . ".sort.txt",
                 'inputFiles'  => [ $bamfileName ],
                 'outputFiles' => [ $sortedname ],
         });        
@@ -130,7 +132,7 @@ sub sortAndIndex {
         $self->addCommand(
             Command->new( {
                 'name'             => "samtools index",
-                'command'          => "samtools index " . $sortedname . " 2> " . $sortedname . "-index.txt.log",
+                'command'          => "samtools index " . $sortedname . " 2> "  . $logfile . ".index.txt",
                 'inputFiles'       => [ $sortedname ],
                 'outputFiles'      => [ $sortedname . ".bai" ],
                 'openthreads'      => 1,
@@ -154,19 +156,33 @@ sub sortedToSam {
     foreach my $sample ($self->getSamples()) {
         my $sortedBamInput = $self->getSortedBamfileName($sample);
         my $sortedSamOutput = $sortedBamInput;
-        $sortedSamOutput =~ s/bam$/sam/;        
+        $sortedSamOutput =~ s/bam$/sam/;  
+        my $logfileName = $sortedSamOutput;
+        my $outputDir = $self->{'config'}->getPath("output");
+        my $logDir = $self->{'config'}->getPath("log");
+        $logfileName =~ s/$outputDir/$logDir/;      
 
         $self->addCommand(
             Command->new({
-                'name'        => "conversion sorted to sam",
-                'command'     => "samtools view -h -o " . $sortedSamOutput ." " . $sortedBamInput . " 2> " . $sortedSamOutput . ".txt.log",
+                'name'        => "conversion sorted bam to sam",
+                'command'     => "samtools view -h -o " . $sortedSamOutput ." " . $sortedBamInput . " 2> " . $logfileName . ".log",
                 'inputFiles'  => [ $sortedBamInput ],
                 'outputFiles' => [ $sortedSamOutput ],
-                'openthreads' => 1,
+                'openthreads' => 1
         }));        
     }
     
+    # do the process
     $self->run();  
+    
+    # return the handler
+    my $samfileHandler = SamfileHandler->new({'config' => $self->{'config'},
+    										  'stack'  => $self->{'stack'} });
+    foreach my $sample ($self->getSamples()) {
+    	$samfileHandler->addFile($sample, $self->getSortedSamfileName($sample));
+    }			
+    
+    return ($samfileHandler);				  								  
 }
 
 
@@ -180,13 +196,12 @@ sub flagstat {
         $flagstatname =~ s/bam$/flagstat.txt/;
         
         $self->addCommand(
-            Command->new( {    #    > ./sample8_flagstat.txt
+            Command->new( {   
                 'name'             => "flagstat",
                 'command'          => "samtools flagstat " . $sortedname . " > " . $flagstatname,
                 'inputFiles'       => [ $sortedname ],
                 'outputFiles'      => [ $flagstatname ],
                 'openthreads'      => 1,
-                'dependentCommands' => [ ]
             })             
         );       
     }
@@ -216,6 +231,16 @@ sub getSortedBamfileName {
     return($sortedname);
 }
 
+sub getSortedSamfileName {
+    my $self = shift;
+    my $sample = shift;
+    
+    my $sortedname = $self->getSortedBamfileName($sample);
+    $sortedname =~ s/bam$/sam/;
+    return($sortedname);
+}
+
+
 sub getSamples {
     my $self = shift;
     return(sort keys %{$self->{'files'}});
@@ -242,6 +267,7 @@ sub cufflinks {
     my $cufflinks = $config->getCommand("cufflinks");
     my $gtf       = $refVars->{'gtf'};
     my $outputdir = $refVars->{'output'};
+    my $options   = $refVars->{'options'};
     
     checkDefined($cufflinks);
     checkDefined($gtf);
@@ -254,13 +280,16 @@ sub cufflinks {
     # get all the bamfile objects
     foreach my $sample ($self->getSamples()) {
         my $sortedName = $self->getSortedBamfileName($sample);
+		my $command = $cufflinks . " " . $options  . " " .  
+                                 "-o " . $outputdir . "/" .
+                                 $sample . "/ -p " . $config->getMaxNumberCores() .
+                                 " -G " . $gtf . " " . $sortedName .
+                                 " 2> " . $self->{'config'}->getPath("log") . "/cufflinks-" . $sample . ".txt";
 
         $self->addCommand(
             Command->new({
                 'name'        => 'Cufflinks',
-                'command'     => $cufflinks . " " .  
-                                #" --upper-quartile-norm --compatible-hits-norm " .
-                                 "-o " . $outputdir . "/" . $sample . "/ -p " . $config->getMaxNumberCores() . " -G " . $gtf . " " . $sortedName . " 2> " . $outputdir . "/log-" . $sample . ".txt",
+                'command'     => $command,
                 'inputFiles'  => [ $sortedName ],
                 'outputFiles' => [ $outputdir . "/" . $sample ],
                 'openthreads' => 0,

@@ -14,7 +14,7 @@ use warnings;
 use Carp qw(croak);
 use Command;
 use Parallel::ForkManager;
-
+use OpenSeqConfig;
 
 # TODO : TEST
 use Data::Dumper;                
@@ -38,7 +38,6 @@ sub new {
     
     my $self = {  # this variable stores the varibles from the object
         'stack' => [],
-        'debug' => 0,
         'config' => $refVars->{'config'}
     };
     
@@ -151,35 +150,13 @@ sub process {
 
 sub isDebugOn {
     my $self = shift;
-    return($self->{'debug'} == 1);
+    return($self->{'config'}->isDebugOn())
 }
 
 sub isDebugOff {
     my $self = shift;
-    return(!$self->isDebugOn());
+    return($self->{'config'}->isDebugOff())
 }
 
-# turns on debugging
-
-sub setDebugOn{
-    my $self = shift;
-    
-    $self->setDebug(1);
-}
-
-# turns off debuggin
-
-sub setDebugOff{
-    my $self = shift;
-    
-    $self->setDebug(0);
-}
-
-# sets debug status
-
-sub setDebug {
-    my $self = shift;
-    $self->{'debug'} = shift;
-}
 
 1;

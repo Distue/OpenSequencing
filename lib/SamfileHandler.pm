@@ -15,6 +15,7 @@ use Carp qw(croak);
 use Samfile;
 use CommandStack;
 use BamfileHandler;
+use OpenSeqConfig;
 
 # -----------------------------------------------------------------------------
 # Class Methods
@@ -26,7 +27,8 @@ sub new {
     my $class = shift;
     my $refVars = shift;
   
-    #TODO check stack
+    checkDefined($refVars->{'config'});
+    checkDefined($refVars->{'stack'});
     
     my $self = {  # this variable stores the varibles from the object
         'files' => {},             # keeps all the files
@@ -59,6 +61,16 @@ sub checkDefined {
     defined($var) or croak ("Essential input not defined."); 
 }
 
+sub checkFile {
+	my $fullFileName = shift;
+	my $debug = shift; 
+	
+	defined($fullFileName) or croak('filename not defined' . $fullFileName);
+	
+	if ($debug == 0) {
+		(-e $fullFileName) or croak('file does not exist' . $fullFileName);
+	}
+}
 
 # -----------------------------------------------------------------------------
 # Instance Methods
@@ -70,13 +82,14 @@ sub addFile {
     my $sampleName = shift;
     my $fullFileName = shift;
     
-    defined($fullFileName) && -e $fullFileName or croak('filename not defined or valid ' . $fullFileName);
+  	checkFile($fullFileName, $self->{'config'}->isDebugOn());
+  	
     defined($sampleName) or croak('sample name not defined or valid');
     
     my $samfile = Samfile->new({
                         'fullFileName' => $fullFileName,
-                        'samtools'     => $self->{'samtools'}
-                        # configuration?
+                        'samtools'     => $self->{'samtools'},
+                        'config'       => $self->{'config'}
                     });
     
     $self->{'files'}->{$sampleName} = $samfile;
@@ -181,11 +194,11 @@ sub sort {
     foreach my $sample ($self->getSamples()) {
         my $samfileName = $self->getSamfile($sample)->getFileName();
         my $sortedName  = $self->getSortedSamfileName($sample);
-
+		my $logfileName = $self->{'config'}->getPath("log") . $self->getSortedSamfileNameShort($sample);
         $self->addCommand(
             Command->new({
                 'name'        => "sort",
-                'command'     => "sort -s -k 1,1 " . $samfileName . " > " . $sortedName . " 2> " . $sortedName . ".txt.log",
+                'command'     => "sort -s -k 1,1 " . $samfileName . " > " . $sortedName . " 2> " . $logfileName . ".txt.log",
                 'inputFiles'  => [ $samfileName ],
                 'outputFiles' => [ $sortedName ],
                 'openthreads' => 0
@@ -205,13 +218,14 @@ sub htseqCount {
     my $gtf = $refVars->{'gtf'};
     my $outputDir = $refVars->{'output'};
     
-    
+    print "test \n";
     # get all the samfile objects
     foreach my $sample ($self->getSamples()) {
         my $sortedName = $self->getSortedSamfileName($sample);
-	my $shortSortedName = $self->getSortedSamfileNameShort($sample);
+	    my $shortSortedName = $self->getSortedSamfileNameShort($sample);
         my $outputName = $outputDir . $shortSortedName . ".htseq.count.txt";
         my $samOutputName = $outputDir . $shortSortedName . ".htseq.count.sam";
+        my $logfileName = $self->{'config'}->getPath("log") . $shortSortedName . "htseq-count.log";
         
         $self->addCommand(
             Command->new({
@@ -221,7 +235,7 @@ sub htseqCount {
                                                 . " -o " . $samOutputName
                                                 . " " . $sortedName
                                                 . " " . $gtf
-                                                . " 1> " . $outputName . " 2> " . $outputName . ".log",
+                                                . " 1> " . $outputName . " 2> " . $logfileName,
                 'inputFiles'  => [ $sortedName ],
                 'outputFiles' => [ $outputName ],
                 'openthreads' => 1
@@ -252,11 +266,10 @@ sub getSortedSamfileNameShort {
     my $longname = $self->getSortedSamfileName($sample);
     
     if($longname =~ /.+\/(.+?sorted.sam)$/) {
-        print $1 . "\n\n";
         return ($1);
     }
     else {
-        croak("unexpected error while trimming sam file name.");
+        croak("unexpected error while trimming sam file name for sample $sample [ " . $longname . "]");
     }
     
     
@@ -267,7 +280,9 @@ sub getSortedSamfileName {
     my $sample = shift;
     
     my $sortedname = $self->getSamfileName($sample);
-    $sortedname =~ s/sam$/sorted.sam/;
+    if ($sortedname !~ /sorted.sam/) {
+        $sortedname =~ s/sam$/sorted.sam/;
+    }
     return($sortedname);
 }
 

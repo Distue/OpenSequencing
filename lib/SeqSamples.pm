@@ -12,6 +12,7 @@ package SeqSamples;
 use strict;
 use warnings;
 use Carp qw(croak);
+use OpenSeqConfig;
 
 # -----------------------------------------------------------------------------
 # Class Methods
@@ -25,16 +26,18 @@ sub new {
   
     # TODO check everything
     # stack
- 
-    checkDir(\$refVars->{'inputDir'});
-    checkOrganism($refVars->{'organism'});
+ 	my $config = $refVars->{'config'};
+ 	my $inputDir = $refVars->{'config'}->getPath("input");
+ 	my $sampleInput = $config->getOption("sampleInput");
+    checkDir(\$inputDir);
+    checkSampleInput($sampleInput);
 
     my $self = {  # this variable stores the varibles from the object
-        'inputDir' => $refVars->{'inputDir'},
-        'organism' => $refVars->{'organism'},
+        'inputDir' => $inputDir,
         'samples'  => {},
-        'type'     => $refVars->{'type'},
-        'stack'    => $refVars->{'stack'}
+        'stack'    => $refVars->{'stack'},
+        'sampleInput' => $sampleInput,
+        'config'   => $config
     };
     
     bless ($self, $class);
@@ -55,17 +58,19 @@ sub DESTROY {
 # Static Methods & Variables
 # -----------------------------------------------------------------------------
 
+sub checkSampleInput() {
+	my $sampleInput = shift;
+	
+	if($sampleInput !~ /[subdirs|files]/) {
+		croak("Mode is not properly set: " . $sampleInput );
+	}
+}
 # checks if the directory is valid and adds '/'
 
 sub checkDir {
     my $refDir = shift;
     # print "checking Dir " . $$refDir . "\n";
     (-d $$refDir) or croak ($$refDir . " cannot be opened"); 
-}
-
-sub checkOrganism {
-    my $organism = shift; 
-    ($organism =~ /human|mouse/) or croak ("'" . $organism . "' is not recognized");   
 }
 
 
@@ -88,39 +93,20 @@ sub checkSample {
 # initialization
 sub init {
     my $self = shift;
-    
-    my $inputDir = $self->{'inputDir'};
-    
-    
-    opendir(IMD, $inputDir) or croak("Cannot open directory " . $inputDir);
-    
-    my @theDirs = readdir(IMD);
-    
-    foreach my $dir (@theDirs) {
-       if ($dir =~ "Sample_(.+)") {
-        
-          #print $dir . " - " .  $1 . "\n";
-          my $sample = $1;
-          
-          # read subdirectory
-          my $subDir = $inputDir  . "/" . $dir . "/";
-          
-          opendir (IMD2, $subDir) or croak("Cannot open directory " . $subDir) ;
-               my @theFiles = readdir(IMD2);
-               
-                foreach my $file (@theFiles) {
-                    #print $file . "\n";
-                    $self->addFile($sample, $subDir, $file);
-                }
-                
-          closedir(IMD2);
-       }
+    my $sampleInput = $self->{'sampleInput'};
+     
+  	if ($sampleInput =~ /subdirs/) {
+  		$self->readSubdirs();
+  	}
+   	elsif($sampleInput =~ /files/) {
+   		$self->readFiles();
+   	}
+   	else {
+   		croak("Mode is not properly set: " . $sampleInput );
     }
-    
-   closedir(IMD);
-   
-   $self->{'init'} = 1;
-   $self->run(); 
+   	
+   	$self->{'init'} = 1;
+   	$self->run(); 
 }
 
 # run the stack
@@ -138,37 +124,95 @@ sub run {
 # at the moment only for fastq! TODO for all different file types, generic etc.
 ##################################################################
 
+
+sub readFiles {
+	my $self = shift;
+	
+	my $inputDir = $self->{'inputDir'};
+    opendir(IMD, $inputDir) or croak("Cannot open directory " . $inputDir);
+    my @theFiles = readdir(IMD);
+    
+    foreach my $file (@theFiles) {
+    	if($file =~ /(.+)\.fastq/) {
+    	    $self->addFile($1, $inputDir, $file);
+    	}
+    }
+   	closedir(IMD);	  	
+}
+
+sub readSubdirs {
+  	my $self = shift;
+  	
+   	my $inputDir = $self->{'inputDir'};
+    
+    opendir(IMD, $inputDir) or croak("Cannot open directory " . $inputDir);
+    
+    my @theDirs = readdir(IMD);
+    
+    foreach my $dir (@theDirs) {
+       	if ($dir =~ "Sample_(.+)") {
+        
+          	#print $dir . " - " .  $1 . "\n";
+          	my $sample = $1;
+          
+          	# read subdirectory
+          	my $subDir = $inputDir  . "/" . $dir . "/";
+          
+          	opendir (IMD2, $subDir) or croak("Cannot open directory " . $subDir) ;
+            my @theFiles = readdir(IMD2);
+               
+        	foreach my $file (@theFiles) {
+                # adds the sample
+                $self->addFile($sample, $subDir, $file);
+            }
+                
+        	closedir(IMD2);
+       	}
+   	}
+    
+   	closedir(IMD);	
+}
+
 sub addFile {
     my $self = shift;
     my $sample = shift;
-    my $subDir = shift; 
+    my $dir = shift; 
     my $fileName = shift;
-
+    	
     # has ending fastq or fastq.gz
     if($fileName =~ /(\.fastq)(\.gz)?$/) {
-        
         # if there are zipped files, unzip them if not already unzipped.
         my $unzippedFileName = $fileName; 
         if($fileName =~ /(.+)\.gz/) {
             $unzippedFileName = $1;
             unless(-e $unzippedFileName) {
-		 $self->{'stack'}->add(Command->new( {
-                        'command' => "gunzip " . $subDir . $fileName,
+		 		$self->{'stack'}->add(Command->new( {
+                        'command' => $self->{'config'}->getCommand("gunzip") . " " . $dir . $fileName,
                         'openthreads'=> 1,
-                        'inputFiles' =>  [ $subDir . $fileName ],
-                        'name'      => "Gunzipping compressed file"
+                        'inputFiles' =>  [ $dir . $fileName ],
+                        'name'      => "Unzipping compressed file"
                 }));
             }
         }
        
-        # get read direction 1
-        if ($unzippedFileName =~ /_R1_/) {
-            $self->{'samples'}->{$sample}->{1} = $subDir . $unzippedFileName;
-        }
+       my $direction1marker = $self->{'config'}->getOption("direction1_filename_marker");
+       my $direction2marker = $self->{'config'}->getOption("direction2_filename_marker");
+       
+       # if the file have direction (R1/R2) 
+       if ($unzippedFileName =~ /$direction1marker|$direction2marker/) {
+        	# get read direction 1
+        	if ($unzippedFileName =~ /$direction1marker/) {
+            	$self->{'samples'}->{$sample}->{1} = $dir . $unzippedFileName;
+        	}
      
-        # get read direction 2
-        elsif ($unzippedFileName =~ /_R2_/) { 
-            $self->{'samples'}->{$sample}->{2} = $subDir . $unzippedFileName;
+     	   	# get read direction 2
+        	elsif ($unzippedFileName =~ /$direction2marker/) { 
+            	$self->{'samples'}->{$sample}->{2} = $dir . $unzippedFileName;
+        	}
+        }
+        # no direction give, must be single end only
+        else {
+        	$self->{'samples'}->{$sample}->{1} = $dir . $unzippedFileName;
         }
     }
 }         

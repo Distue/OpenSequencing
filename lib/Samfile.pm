@@ -15,6 +15,7 @@ use Carp qw(croak);
 use Bamfile;
 use Command;
 use CommandStack;
+use OpenSeqConfig;
 
 # -----------------------------------------------------------------------------
 # Class Methods
@@ -28,13 +29,18 @@ sub new {
     # command 
     my $refVars = shift;
     
-    checkFile($refVars->{'fullFileName'});
+    checkDefined($refVars->{'config'});
+    
+    if ($refVars->{'config'}->isDebugOff()) {
+        checkFile($refVars->{'fullFileName'});
+    }
 
     #TODO check variables
     
     my $self = {  # this variable stores the varibles from the object
         'fullFileName' => $refVars->{'fullFileName'},
         'samtools'     => $refVars->{'samtools'},
+        'config'        => $refVars->{'config'}
     };
     
     bless ($self, $class);
@@ -68,6 +74,13 @@ sub checkFile {
         croak("Sam file is empty: '" . $fullFileName . "'");   
     }
 }
+
+sub checkDefined {
+    my $var = shift;
+    # print "checking Dir " . $$refDir . "\n";
+    defined($var) or croak ("Essential input not defined."); 
+}
+
 
 # -----------------------------------------------------------------------------
 # Instance Methods
@@ -143,20 +156,29 @@ sub getBamFileName {
     return ($bamFileName);
 }
 
-# TODO: proper logging
+sub getShortFileName {
+	my $self = shift;
+	my $fullname = $self->{'fullFileName'};
+	
+	if ($fullname =~ /.+\/(.*?)$/) {
+		return($1);
+	}
+	else {
+			croak("Getting short name for bam file failed");
+	}
+}
 
 sub getLogFile {
     my $self = shift;
-    
-    # TOOOOOOOODOOOO
-    my $logFileName = $self->{'fullFileName'};
+ 
+    my $logFileName =  $self->{'config'}->getPath("log") . $self->getShortFileName();
     #$logFileName =~ s/\/.+?$/\/log-/;
     $logFileName .= "-to-bam.txt.log";
     return ($logFileName);   
 }
 
-# returns true (1) if sam header has @SQ lines
 
+# returns true (1) if sam header has @SQ lines
 sub headerHasSQLines {
     my $self = shift;
     

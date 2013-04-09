@@ -15,29 +15,45 @@ use OpenSeqConfig;
 sub getConfig {
     our $config = OpenSeqConfig->new();
     
-    $config->setCommand("bwa", "bwa");
-    $config->setFile("reference", "hg19bwaidx", "/share/massstorage/seq-tools/bwa/reference/");
-    
-    $config->setPath("gtf",        "/share/massstorage/seq-genomes/");
-    $config->setFile("gtfNCBI",    "Homo_sapiens.NCBI.build37.2.converted.gtf",    $config->getPath("gtf"));
-    $config->setFile("gtfUCSC",    "Homo_sapiens.UCSC.hg19.gtf",                   $config->getPath("gtf"));
-    $config->setFile("gtfEnsembl", "Homo_sapiens.Ensembl.GRCh37.65.converted.gtf", $config->getPath("gtf"));
-    
-    $config->setPath("cufflinks", "/share/massstorage/seq-tools/cufflinks/current/");
+    $config->setCommand("bwa",     "bwa");
+    $config->setCommand("bowtie2", "bowtie2");
+    $config->setCommand("tophat",  "tophat");
+
+    $config->setFile("Bowtie2reference",  "genome",        "/share/massstorage/seq-genomes/Homo_sapiens/Ensembl/GRCh37/Sequence/Bowtie2Index/");
+    $config->setFile("BWAreference",      "genome",        "/share/massstorage/seq-genomes/Homo_sapiens/Ensembl/GRCh37/Sequence/BWAIndex/");
+
+    $config->setPath("cufflinks",    "/share/massstorage/seq-tools/cufflinks/current/");
     $config->setCommand("cufflinks", $config->getPath("cufflinks") . "cufflinks");
     $config->setCommand("cuffdiff",  $config->getPath("cufflinks") . "cuffdiff");
+	$config->setCommand("gunzip",     "gunzip");
     
     $config->setPath("cufflinksOutput", "/share/massstorage/seq-tools/cufflinks/current/");
-    $config->setFile("gtfUCSC",         "Homo_sapiens.UCSC.hg19.gtf");
-    $config->setFile("gtfEnsembl",      "Homo_sapiens.Ensembl.GRCh37.65.converted.gtf");
     $config->setMaxNumberCores(42);
     
+    $config->setFile("gtf",  "genes.gtf", "/share/massstorage/seq-genomes/Homo_sapiens/Ensembl/GRCh37/Annotation/Genes/");
+    $config->setFile("gtfAnnotation", "Homo_sapiens.Ensembl.GRCh37.converted.gtf", "/share/massstorage/seq-genomes/");
+    
+    # parameters
+    $config->setOption("sampleInput", "subdirs");
+    $config->setOption("direction1_filename_marker", "_R1_");
+    $config->setOption("direction2_filename_marker", "_R2_");
     
     return($config);
 }
 
 
 1;
+
+
+
+
+
+    # just debug:
+    # $config->setFile("BWAreference", "hg19bwaidx", "/share/massstorage/seq-tools/bwa/reference/"); 
+    # $config->setFile("gtfNCBI",    "Homo_sapiens.NCBI.build37.2.converted.gtf",    $config->getPath("gtf"));
+    # $config->setFile("gtfUCSC",    "Homo_sapiens.UCSC.hg19.gtf",                   $config->getPath("gtf"));
+   # $config->setFile("gtf",  "Homo_sapiens.UCSC.hg19.gtf", "/share/massstorage/seq-genomes/Homo_sapiens/UCSC/hg19/Annotation/Genes/");   
+    
 
 
 #my $bwacommand = "bwa";

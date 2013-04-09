@@ -16,6 +16,7 @@ use SeqSamples;
 use Command;
 use CommandStack;
 use SamfileHandler;
+use OpenSeqConfig;
 
 # -----------------------------------------------------------------------------
 # Class Methods
@@ -41,8 +42,8 @@ sub new {
     my $self = {  # this variable stores the varibles from the object
         'seqSamples' => $refVars->{'seqSamples'},
         'outputDir'  => $config->getPath("output"),
-        'logDir'     => $refVars->{'logDir'},
-        'reference'  => $config->getFileFull("reference"),
+        'logDir'     => $refVars->{'config'}->getPath("log"),
+        'BWAreference'  => $config->getFileFull("BWAreference"),
         'bwa'        => $config->getCommand("bwa"),
         'stack'      => $refVars->{'stack'},
         'config'     => $refVars->{'config'}
@@ -97,7 +98,7 @@ sub createCommandSingleEnds {
                             . "-t " . $self->{'config'}->getMaxNumberCores() . " "
                             
                             # reference
-                            . $self->{'reference'} . " "
+                            . $self->{'BWAreference'} . " "
                     
                             # in Illumina 1.3+ read format
                             # . "-I "
@@ -134,7 +135,7 @@ sub createCommandPairedEnd {
     
     my $command = Command->new({
             'name'    => "BWA paired ends",
-           'command' =>  $self->{'bwa'} . " sampe " . $self->{'reference'} . " "
+           'command' =>  $self->{'bwa'} . " sampe " . $self->{'BWAreference'} . " "
                             # first alignment file
                             . $direction1Sai . " "
                             . $direction2Sai . " "
@@ -163,7 +164,7 @@ sub createCommandSingleRead {
     
     my $command = Command->new({
             'name'    => "BWA single read",
-           'command' =>  $self->{'bwa'} . " samse " . $self->{'reference'} . " "
+           'command' =>  $self->{'bwa'} . " samse " . $self->{'BWAreference'} . " "
                             # first alignment file
                             . $direction1Sai . " "
                             . $direction1FileName ." "
@@ -232,7 +233,7 @@ sub run {
                 $self->createCommandSingleEnds(
                     $self->{'seqSamples'}-> getDirection2FullFileName($sample),     # input file
                     $tmpDir2File,                                                   # tmp dir 
-                    $self->{'outputDir'} . "log-bwa-" . $sample . "_2.txt"          # log file
+                    $self->{'logDir'} . "log-bwa-" . $sample . "_2.txt"          # log file
                 )
             );
             
@@ -275,7 +276,8 @@ sub getSamfilesHandler {
     my $self = shift;
     
     my $samfileHandler = SamfileHandler->new({
-                    'stack' => $self->{'stack'}
+                    'stack' => $self->{'stack'},
+                    'config' => $self->{'config'}
                 });
     
     foreach my $sample ($self->getSamples()) {

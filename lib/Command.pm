@@ -120,7 +120,8 @@ sub outputFilesExist {
     else {
         my $exist = 1;
         foreach my $file (@{$self->{'outputFiles'}}) {
-            unless(-e $file) {
+            # if the file does not exist or the file has not non zero file size
+            if(!-e $file || !-s $file) {
                 $exist = 0;
             }
         }
