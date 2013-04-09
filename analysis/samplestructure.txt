@@ -1,0 +1,18 @@
+suggested paths, can be changed in the config.pm file and in the pl files. 
+
+/
+/....R  - analysis file
+/raw/   - directory containing the raw data
+/raw/pheno.txt - file with sample info, example in directory
+/raw/Sample_KCN_A/ - directory for one sample
+/raw/KCN_A_ACTTGA_L003_R1_001.fastq - fastq or fastq.gz file for first direction  (config.pm for markers of direction in filename)
+/raw/KCN_A_ACTTGA_L003_R2_001.fastq - fastq or fastq.gz file for second direction (optional!)
+...
+
+/alignment/ - directory containing alignments
+/alignment/run1/ - directory containing a specific run .(was created by running the pipeline)
+/alignment/run1/.. all the files
+/alignment/run1/routput/ - directory for the r analysis output
+
+
+
